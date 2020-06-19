@@ -1,0 +1,7 @@
+#for manjaro and arch linux
+
+1. sudo pacman -S python3
+2. sudo pacman -S postgresql
+3. pip install flask
+4. pip install flask-sqlalchemy
+5. pip install psycopg2
