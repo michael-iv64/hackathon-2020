@@ -1,0 +1,323 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Реализация модели определения релевантных постов методом TF-IDF"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Подключение библиотек и загрузка данных"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[nltk_data] Downloading package stopwords to\n",
+      "[nltk_data]     C:\\Users\\maris\\AppData\\Roaming\\nltk_data...\n",
+      "[nltk_data]   Package stopwords is already up-to-date!\n"
+     ]
+    }
+   ],
+   "source": [
+    "import pandas as pd\n",
+    "import re\n",
+    "import nltk\n",
+    "import datetime\n",
+    "nltk.download(\"stopwords\")\n",
+    "from sklearn.feature_extraction.text import CountVectorizer\n",
+    "from sklearn.feature_extraction.text import TfidfVectorizer, TfidfTransformer\n",
+    "import numpy as np\n",
+    "import numpy.linalg as LA"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data = pd.read_csv('posts.csv', encoding='utf-8')\n",
+    "test_set = [\"умный город цифровой двойник управление территорией \\\n",
+    "            респак заброшенные домовладения цифровой регион ит кластер виноградарство\"]\n",
+    "stopWords = nltk.corpus.stopwords.words('Russian')\n",
+    "data = data.dropna()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "#### Приведение слов к начальной форме"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [],
+   "source": [
+    "from nltk import wordpunct_tokenize\n",
+    "import pymorphy2\n",
+    "def tokenize(s):\n",
+    "    morph = pymorphy2.MorphAnalyzer()\n",
+    "    return [morph.parse(word)[0].normal_form for word in wordpunct_tokenize(s)]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Обучение модели"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "#### Пословарная модель"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Пословарная модель\n",
+    "\n",
+    "#vectorizer = CountVectorizer(stop_words = stopWords, tokenizer=tokenize, ngram_range=(1, 3))\n",
+    "vectorizer = CountVectorizer(stop_words = stopWords, tokenizer=tokenize)\n",
+    "transformer = TfidfTransformer()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "#### Посимвольная модель"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Посимвольная модель\n",
+    "# + использование n-грамм\n",
+    "\n",
+    "vectorizer = CountVectorizer(stop_words = stopWords, analyzer='char', ngram_range=(3, 5))\n",
+    "transformer = TfidfTransformer()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 40,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "D:\\Users\\maris\\Anaconda3\\lib\\site-packages\\sklearn\\feature_extraction\\text.py:385: UserWarning: Your stop_words may be inconsistent with your preprocessing. Tokenizing the stop words generated tokens ['большой', 'весь', 'ещё', 'имя', 'мочь', 'нея', 'нибыть', 'ничто', 'свой', 'хороший', 'это'] not in stop_words.\n",
+      "  'stop_words.' % sorted(inconsistent))\n"
+     ]
+    }
+   ],
+   "source": [
+    "# процесс обучения\n",
+    "\n",
+    "trainVectorizerArray = vectorizer.fit_transform(data.text).toarray()\n",
+    "testVectorizerArray = vectorizer.transform(test_set).toarray()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 41,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# рассчет косинусного расстояния\n",
+    "transformer.fit(trainVectorizerArray)\n",
+    "trainVectorizerArray_tfidf = transformer.transform(trainVectorizerArray).toarray()\n",
+    "\n",
+    "transformer.fit(testVectorizerArray)\n",
+    "testVectorizerArray_tfidf = transformer.transform(testVectorizerArray).toarray()\n",
+    "\n",
+    "cx = lambda a, b : round(np.inner(a, b) / (LA.norm(a)*LA.norm(b)), 3)\n",
+    "cosines = [cx(vector, testVectorizerArray_tfidf[0]) for vector in trainVectorizerArray_tfidf]\n",
+    "data['cosines'] = cosines\n",
+    "data = data.sort_values('cosines', ascending=False)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 42,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>user_name</th>\n",
+       "      <th>date_publication</th>\n",
+       "      <th>text</th>\n",
+       "      <th>cosines</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>112</th>\n",
+       "      <td>gubernator46</td>\n",
+       "      <td>2020-02-12T17:10:24</td>\n",
+       "      <td>Провёл в Москве три рабочих встречи по важным ...</td>\n",
+       "      <td>0.143</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>88</th>\n",
+       "      <td>kozhemiako.oleg</td>\n",
+       "      <td>2020-02-12T11:42:48</td>\n",
+       "      <td>Сегодня во время посещения офиса «Ростелекома»...</td>\n",
+       "      <td>0.134</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>40</th>\n",
+       "      <td>dpasler.official</td>\n",
+       "      <td>2020-02-06T18:11:45</td>\n",
+       "      <td>Оренбург должен меняться. Современный город - ...</td>\n",
+       "      <td>0.126</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>121</th>\n",
+       "      <td>nikolaev_aisen</td>\n",
+       "      <td>2020-02-15T06:57:36</td>\n",
+       "      <td>Встретился с министром цифрового развития, свя...</td>\n",
+       "      <td>0.118</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>79</th>\n",
+       "      <td>klychkov_andrey</td>\n",
+       "      <td>2020-02-12T13:27:24</td>\n",
+       "      <td>Нахожусь в Москве с большой деловой программой...</td>\n",
+       "      <td>0.108</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "             user_name     date_publication  \\\n",
+       "112       gubernator46  2020-02-12T17:10:24   \n",
+       "88     kozhemiako.oleg  2020-02-12T11:42:48   \n",
+       "40   dpasler.official   2020-02-06T18:11:45   \n",
+       "121     nikolaev_aisen  2020-02-15T06:57:36   \n",
+       "79     klychkov_andrey  2020-02-12T13:27:24   \n",
+       "\n",
+       "                                                  text  cosines  \n",
+       "112  Провёл в Москве три рабочих встречи по важным ...    0.143  \n",
+       "88   Сегодня во время посещения офиса «Ростелекома»...    0.134  \n",
+       "40   Оренбург должен меняться. Современный город - ...    0.126  \n",
+       "121  Встретился с министром цифрового развития, свя...    0.118  \n",
+       "79   Нахожусь в Москве с большой деловой программой...    0.108  "
+      ]
+     },
+     "execution_count": 42,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Просмотр результата (первые 5 строк)\n",
+    "data.iloc[0:5]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 43,
+   "metadata": {
+    "scrolled": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "'Провёл в Москве три рабочих встречи по важным для области вопросам ДорогиС первым замминистра транспорта Иннокентием Алафиновым обсудил выделение дополнительных средств на развитие дорог. Договорился, что нашему региону федерация направит 585,5 млн рублей на продолжение реконструкции трассы «Курск – Поныри», а также расширение улиц Бойцов 9-й Дивизии и Светлая.Также я предложил Минтрансу разработать механизм перераспределения не освоенных субъектами денег между более ответственными регионами. Курская область готова в 2020 году приступить к работам ещё на 15 объектах общей протяжённостью 40 км — вопрос только в финансировании. Очень надеюсь, что предложенный мной механизм внедрят. Городская средаВстретился с первым замминистра строительства и ЖКХ Иреком Файзуллиным. Обсудил с ним участие Железногорска во Всероссийском конкурсе проектов создания комфортной городской среды в малых городах и исторических поселениях. Администрация города уже разработала проект благоустройства Парка культуры и отдыха им. Никитина, но его не воплотить в жизнь без федеральной поддержки. ЗдравоохранениеС Анастасией Раковой, заммэра Москвы по социальному развитию, рассмотрел внедрение в Курской области Единой медицинской информационной аналитической системы. Сейчас она успешно работает в столице. Я планирую использовать её, чтобы выстроить в регионе цифровое управление здравоохранением и запустить единую медицинскую карту.Договорились с Анастасией Владимировной, что администрация области и правительство Москвы подпишут соглашение об использовании функционала ЕМИАС в медицинских учреждениях региона.Командировка ещё продолжается. О результатах проинформирую на своих страничках в соцсетях.#КурскаяОбласть #Дороги #ГородскаяСреда #Здравоохранение'"
+      ]
+     },
+     "execution_count": 43,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "data.iloc[0]['text']"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 44,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "html = data.to_html()\n",
+    "with open(\"result.html\", \"w\", encoding=\"utf-8\") as file:\n",
+    "    file.write(html)"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.6"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
